@@ -1,0 +1,33 @@
+#!/bin/sh
+
+set -eu pipe pipe
+
+EXEC=$LAMBDA_TASK_ROOT/$_HANDLER
+
+# event loop
+while true
+do
+  HEADERS="$(mktemp)"
+  # Get an event
+  EVENT_DATA=$(curl -sS -LD "$HEADERS" -X GET "http://${AWS_LAMBDA_RUNTIME_API}/2018-06-01/runtime/invocation/next")
+  REQUEST_ID=$(grep -Fi Lambda-Runtime-Aws-Request-Id "$HEADERS" | tr -d '[:space:]' | cut -d: -f2)
+
+  # Execute the handler function from the script
+  RESPONSE_FILE="$(mktemp)"
+  ERROR_FILE="$(mktemp)"
+  echo $REQUEST_ID
+  echo $EVENT_DATA
+  echo $RESPONSE_FILE
+  echo $ERROR_FILE
+  $EXEC "$REQUEST_ID" "$EVENT_DATA" "$RESPONSE_FILE" "$ERROR_FILE" -Djavax.net.ssl.trustStore=cacerts -Djavax.net.ssl.trustStorePassword=changeit
+
+  # Send the response
+  if [ -s $RESPONSE_FILE ]; then
+      RESPONSE=$(cat $RESPONSE_FILE)
+      curl -X POST "http://${AWS_LAMBDA_RUNTIME_API}/2018-06-01/runtime/invocation/$REQUEST_ID/response"  -d "$RESPONSE"
+  else
+      RESPONSE=$(cat $ERROR_FILE)
+      curl -X POST "http://${AWS_LAMBDA_RUNTIME_API}/2018-06-01/runtime/invocation/$REQUEST_ID/error"  -d "$RESPONSE"
+  fi
+
+done

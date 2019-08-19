@@ -1,0 +1,11 @@
+FROM oracle/graalvm-ce:19.1.1
+
+# install native image
+RUN gu install native-image
+
+# Create a volume to which we can mount to build:
+VOLUME /project
+WORKDIR /project
+
+# And finally, run native-image
+ENTRYPOINT ["native-image"]
